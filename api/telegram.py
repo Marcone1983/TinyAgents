@@ -16,28 +16,21 @@ SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PRODUCT_ID = os.environ.get('STRIPE_PRODUCT_ID')
 
-# Inizializza i client
-try:
-    groq_client = Groq(api_key=GROQ_API_KEY)
-except Exception as e:
-    print(f"Attenzione: Impossibile inizializzare Groq client. Errore: {e}")
-    groq_client = None
-
-try:
-    supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    print(f"Attenzione: Impossibile inizializzare Supabase client. Errore: {e}")
-    supabase_client = None
-
-try:
-    stripe.api_key = STRIPE_SECRET_KEY
-except Exception as e:
-    print(f"Attenzione: Impossibile inizializzare Stripe. Errore: {e}")
-
 # --- FUNZIONI DI GESTIONE CREDITI (SUPABASE) ---
+
+def get_supabase_client() -> Client | None:
+    """Inizializza e restituisce il client Supabase."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return None
+    try:
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"Errore durante l'inizializzazione del client Supabase: {e}")
+        return None
 
 def get_user_credits(user_id: int) -> int:
     """Recupera i crediti dell'utente da Supabase. Crea un record se non esiste."""
+    supabase_client = get_supabase_client()
     if not supabase_client:
         return 0
         
@@ -47,6 +40,7 @@ def get_user_credits(user_id: int) -> int:
         if response.data:
             return response.data[0]['credits']
         else:
+            # Inizializza l'utente con 0 crediti
             supabase_client.table('users').insert({"id": user_id, "credits": 0}).execute()
             return 0
     except Exception as e:
@@ -55,10 +49,12 @@ def get_user_credits(user_id: int) -> int:
 
 def decrement_user_credits(user_id: int) -> bool:
     """Decrementa i crediti dell'utente di 1."""
+    supabase_client = get_supabase_client()
     if not supabase_client:
         return False
         
     try:
+        # Nota: get_user_credits è ricorsivo e crea l'utente se non esiste
         current_credits = get_user_credits(user_id)
         if current_credits > 0:
             new_credits = current_credits - 1
@@ -68,6 +64,19 @@ def decrement_user_credits(user_id: int) -> bool:
     except Exception as e:
         print(f"Errore Supabase (decrement_user_credits): {e}")
         return False
+
+# --- FUNZIONE DI ACQUISTO (STRIPE) ---
+
+def get_stripe_api_key():
+    """Restituisce la chiave API di Stripe."""
+    if not STRIPE_SECRET_KEY:
+        return None
+    try:
+        stripe.api_key = STRIPE_SECRET_KEY
+        return stripe.api_key
+    except Exception as e:
+        print(f"Errore durante l'inizializzazione di Stripe: {e}")
+        return None
 
 # --- FUNZIONE DI ACQUISTO (STRIPE) ---
 
@@ -148,8 +157,8 @@ def get_llm_response(agent_name, user_input):
     """
     Funzione per interrogare l'LLM con il prompt specifico dell'agent.
     """
-    if not groq_client:
-        return "Servizio AI non disponibile. Controlla la configurazione della chiave API Groq."
+    if not GROQ_API_KEY:
+        return "Servizio AI non disponibile. Chiave API Groq mancante."
         
     if agent_name not in AGENTS:
         return "Agente non valido."
@@ -157,6 +166,9 @@ def get_llm_response(agent_name, user_input):
     system_prompt = AGENTS[agent_name]["system_prompt"]
     
     try:
+        # Inizializzazione del client Groq all'interno della funzione
+        groq_client = Groq(api_key=GROQ_API_KEY)
+        
         chat_completion = groq_client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_prompt},
