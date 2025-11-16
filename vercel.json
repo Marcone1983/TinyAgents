@@ -6,6 +6,7 @@
       "use": "@vercel/python"
     }
   ],
+  "public": true,
   "routes": [
     {
       "src": "/api/telegram",
@@ -16,20 +17,8 @@
       "dest": "api/stripe_webhook.py"
     },
     {
-      "src": "/main.js",
-      "dest": "main.js"
-    },
-    {
-      "src": "/index.html",
-      "dest": "index.html"
-    },
-    {
-      "src": "/",
-      "dest": "index.html"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/public/$1"
     }
   ]
 }

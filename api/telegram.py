@@ -67,23 +67,17 @@ def decrement_user_credits(user_id: int) -> bool:
 
 # --- FUNZIONE DI ACQUISTO (STRIPE) ---
 
-def get_stripe_api_key():
-    """Restituisce la chiave API di Stripe."""
-    if not STRIPE_SECRET_KEY:
-        return None
-    try:
-        stripe.api_key = STRIPE_SECRET_KEY
-        return stripe.api_key
-    except Exception as e:
-        print(f"Errore durante l'inizializzazione di Stripe: {e}")
-        return None
-
-# --- FUNZIONE DI ACQUISTO (STRIPE) ---
-
 def create_stripe_checkout_session(user_id: int, bot_url: str) -> str:
     """Crea una sessione di checkout Stripe e restituisce l'URL."""
-    if not STRIPE_PRODUCT_ID or not stripe.api_key:
+    if not STRIPE_SECRET_KEY or not STRIPE_PRODUCT_ID:
         return "Errore di configurazione Stripe. Controlla STRIPE_PRODUCT_ID e STRIPE_SECRET_KEY."
+    
+    try:
+        # Inizializzazione di Stripe all'interno della funzione
+        stripe.api_key = STRIPE_SECRET_KEY
+    except Exception as e:
+        print(f"Errore durante l'inizializzazione di Stripe: {e}")
+        return "Errore interno durante l'inizializzazione di Stripe."
 
     success_url = f"https://t.me/TinyAgents_bot?start=success_{user_id}"
     cancel_url = f"https://t.me/TinyAgents_bot?start=cancel_{user_id}"
