@@ -4,7 +4,7 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qsl, urlparse
 import telegram
 from groq import Groq
-from supabase import create_client, Client
+from supabase.client import create_client, Client
 import stripe
 
 # --- CONFIGURAZIONE INIZIALE ---
@@ -88,7 +88,7 @@ def create_stripe_checkout_session(user_id: int, bot_url: str) -> str:
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
-                'price': STRIPE_PRODUCT_ID, # Questo dovrebbe essere l'ID del prezzo, non del prodotto
+                'price': STRIPE_PRODUCT_ID, # Questo è l'ID del Prodotto, non del Prezzo. Lo useremo per cercare il prezzo predefinito.
                 'quantity': 1,
             }],
             mode='payment',

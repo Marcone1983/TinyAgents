@@ -1,7 +1,7 @@
 import os
 import json
 from http.server import BaseHTTPRequestHandler
-from supabase import create_client, Client
+from supabase.client import create_client, Client
 import stripe
 
 # --- CONFIGURAZIONE INIZIALE ---
