@@ -3,6 +3,7 @@ import json
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qsl, urlparse
 import telegram
+from telegram import ParseMode
 from groq import Groq
 from supabase.client import create_client, Client
 import stripe
@@ -192,11 +193,11 @@ class handler(BaseHTTPRequestHandler):
                 try:
                     content_length = int(self.headers['Content-Length'])
                     post_data = self.rfile.read(content_length)
-                    update = telegram.Update.de_json(json.loads(post_data.decode('utf-8')), None)
+                    update = telegram.Update.from_dict(json.loads(post_data.decode('utf-8')))
                     if update.message:
                         bot = telegram.Bot(token=TELEGRAM_TOKEN)
                         missing_keys = [k for k, v in {'GROQ_API_KEY': GROQ_API_KEY, 'SUPABASE_URL': SUPABASE_URL, 'STRIPE_SECRET_KEY': STRIPE_SECRET_KEY}.items() if not v]
-                        bot.send_message(chat_id=update.message.chat.id, text=f"⚠️ **ERRORE CRITICO DI CONFIGURAZIONE!** ⚠️\n\nIl bot non è configurato correttamente. Le seguenti chiavi sono mancanti o vuote in Vercel: {', '.join(missing_keys)}\n\n**SOLUZIONE:** Vai alla dashboard di Vercel e inserisci le chiavi mancanti.", parse_mode=telegram.ParseMode.MARKDOWN)
+                        bot.send_message(chat_id=update.message.chat.id, text=f"⚠️ **ERRORE CRITICO DI CONFIGURAZIONE!** ⚠️\n\nIl bot non è configurato correttamente. Le seguenti chiavi sono mancanti o vuote in Vercel: {', '.join(missing_keys)}\n\n**SOLUZIONE:** Vai alla dashboard di Vercel e inserisci le chiavi mancanti.", parse_mode=ParseMode.MARKDOWN)
                 except Exception as e:
                     print(f"Errore durante l'invio del messaggio di errore: {e}")
             
@@ -223,7 +224,7 @@ class handler(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length)
         
         try:
-            update = telegram.Update.de_json(json.loads(post_data.decode('utf-8')), None)
+            update = telegram.Update.from_dict(json.loads(post_data.decode('utf-8')))
             
             if not update.message or not update.message.text:
                 self.send_response(200)
@@ -256,12 +257,12 @@ class handler(BaseHTTPRequestHandler):
                         welcome_message += "💳 **Monetizzazione:** Usa `/credits` per vedere il tuo saldo e `/buy` per acquistare nuovi utilizzi."
                         
                         if bot:
-                            bot.send_message(chat_id=chat_id, text=welcome_message, parse_mode=telegram.ParseMode.MARKDOWN)
+                            bot.send_message(chat_id=chat_id, text=welcome_message, parse_mode=ParseMode.MARKDOWN)
 
                 elif text.startswith('/credits'):
                     credits = get_user_credits(user_id)
                     if bot:
-                        bot.send_message(chat_id=chat_id, text=f"Il tuo saldo attuale è di **{credits}** crediti. Usa `/buy` per ricaricare.", parse_mode=telegram.ParseMode.MARKDOWN)
+                        bot.send_message(chat_id=chat_id, text=f"Il tuo saldo attuale è di **{credits}** crediti. Usa `/buy` per ricaricare.", parse_mode=ParseMode.MARKDOWN)
 
                 elif text.startswith('/buy'):
                     bot_url = self.headers.get('X-Forwarded-Host', 'https://t.me/TinyAgents_bot')
@@ -270,7 +271,7 @@ class handler(BaseHTTPRequestHandler):
                     if "Errore" in checkout_url:
                         bot.send_message(chat_id=chat_id, text=checkout_url)
                     else:
-                        bot.send_message(chat_id=chat_id, text=f"Clicca qui per acquistare crediti: [Acquista Crediti]({checkout_url})", parse_mode=telegram.ParseMode.MARKDOWN)
+                        bot.send_message(chat_id=chat_id, text=f"Clicca qui per acquistare crediti: [Acquista Crediti]({checkout_url})", parse_mode=ParseMode.MARKDOWN)
 
                 elif text.startswith('/'):
                     parts = text.split(' ', 1)
@@ -293,14 +294,14 @@ class handler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 return
                             
-                            bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=telegram.ParseMode.MARKDOWN)
+                            bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=ParseMode.MARKDOWN)
                             
                             response = get_llm_response(command, user_input)
                             
                             bot.send_message(chat_id=chat_id, text=response)
                         else:
                             if bot:
-                                bot.send_message(chat_id=chat_id, text=f"Uso corretto: `/{command} [la tua richiesta]`", parse_mode=telegram.ParseMode.MARKDOWN)
+                                bot.send_message(chat_id=chat_id, text=f"Uso corretto: `/{command} [la tua richiesta]`", parse_mode=ParseMode.MARKDOWN)
                     else:
                         if bot:
                             bot.send_message(chat_id=chat_id, text="Comando non riconosciuto. Usa /start per vedere la lista degli agenti disponibili.")
