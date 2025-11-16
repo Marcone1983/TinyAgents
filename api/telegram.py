@@ -48,23 +48,34 @@ def get_user_credits(user_id: int) -> int:
         print(f"Errore Supabase (get_user_credits): {e}")
         return 0
 
-def decrement_user_credits(user_id: int) -> bool:
-    """Decrementa i crediti dell'utente di 1."""
+def decrement_user_credits(user_id: int) -> int:
+    """Decrementa i crediti dell'utente di 1 in modo atomico (o quasi) e restituisce il nuovo saldo. Restituisce -1 in caso di errore o crediti esauriti."""
     supabase_client = get_supabase_client()
     if not supabase_client:
-        return False
+        return -1
         
     try:
-        # Nota: get_user_credits è ricorsivo e crea l'utente se non esiste
-        current_credits = get_user_credits(user_id)
+        # 1. Legge il saldo corrente
+        response = supabase_client.table('users').select('credits').eq('id', user_id).execute()
+        
+        if not response.data:
+            # L'utente non esiste, lo creiamo con 0 crediti e falliamo il decremento
+            supabase_client.table('users').insert({"id": user_id, "credits": 0}).execute()
+            return -1
+            
+        current_credits = response.data[0]['credits']
+        
         if current_credits > 0:
             new_credits = current_credits - 1
+            
+            # 2. Aggiorna il saldo
             supabase_client.table('users').update({"credits": new_credits}).eq('id', user_id).execute()
-            return True
-        return False
+            return new_credits
+        
+        return -1 # Crediti esauriti
     except Exception as e:
         print(f"Errore Supabase (decrement_user_credits): {e}")
-        return False
+        return -1
 
 # --- FUNZIONE DI ACQUISTO (STRIPE) ---
 
@@ -244,11 +255,36 @@ class handler(BaseHTTPRequestHandler):
             try:
                 # Logica di routing dei comandi
                 if text.startswith('/start'):
-                    if "success" in text:
-                        bot.send_message(chat_id=chat_id, text="🎉 Pagamento completato con successo! I tuoi crediti saranno aggiunti a breve. Usa /credits per controllare il saldo.")
-                    elif "cancel" in text:
-                        bot.send_message(chat_id=chat_id, text="❌ Pagamento annullato. Puoi riprovare in qualsiasi momento con /buy.")
-                    else:
+                    # La logica di gestione dei pagamenti è stata spostata nella funzione do_GET per gestire i reindirizzamenti di Stripe
+                    # La logica di gestione dei pagamenti è stata spostata nella funzione do_GET per gestire i reindirizzamenti di Stripe
+                    # La logica di gestione dei pagamenti è stata spostata nella funzione do_GET per gestire i reindirizzamenti di Stripe
+                    
+                    # Gestione dei parametri di query per i reindirizzamenti di Stripe
+                    query = dict(parse_qsl(urlparse(text).query))
+                    
+                    if 'start' in query:
+                        start_param = query['start']
+                        if start_param.startswith("success"):
+                            bot.send_message(chat_id=chat_id, text="🎉 Pagamento completato con successo! I tuoi crediti saranno aggiunti a breve. Usa /credits per controllare il saldo.")
+                            self.send_response(200)
+                            self.end_headers()
+                            return
+                        elif start_param.startswith("cancel"):
+                            bot.send_message(chat_id=chat_id, text="❌ Pagamento annullato. Puoi riprovare in qualsiasi momento con /buy.")
+                            self.send_response(200)
+                            self.end_headers()
+                            return
+                    
+                    # Logica di benvenuto standard
+                    welcome_message = "Benvenuto in Tiny Agents! 🤖\n\n"
+                    welcome_message += "Scegli un micro-agente per un compito specifico:\n\n"
+                    for agent_name, data in AGENTS.items():
+                        welcome_message += f"🔹 `/{agent_name}` - {data['description']}\n"
+                    welcome_message += "\nUsa il comando seguito dalla tua richiesta. Esempio:\n`/meme_persona gatto che suona il pianoforte`\n\n"
+                    welcome_message += "💳 **Monetizzazione:** Usa `/credits` per vedere il tuo saldo e `/buy` per acquistare nuovi utilizzi."
+                    
+                    if bot:
+                        bot.send_message(chat_id=chat_id, text=welcome_message, parse_mode=ParseMode.MARKDOWN)
                         welcome_message = "Benvenuto in Tiny Agents! 🤖\n\n"
                         welcome_message += "Scegli un micro-agente per un compito specifico:\n\n"
                         for agent_name, data in AGENTS.items():
@@ -292,13 +328,15 @@ class handler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 return
 
-                            if not decrement_user_credits(user_id):
-                                bot.send_message(chat_id=chat_id, text="⚠️ Errore nel decremento dei crediti. Riprova o contatta l'assistenza.")
+                           new_credits = decrement_user_credits(user_id)
+                            
+                            if new_credits == -1:
+                                bot.send_message(chat_id=chat_id, text="⚠️ Errore nel decremento dei crediti o crediti esauriti. Riprova o contatta l'assistenza.")
                                 self.send_response(200)
                                 self.end_headers()
                                 return
                             
-                           bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=ParseMode.MARKDOWN), parse_mode=ParseMode.MARKDOWN)
+                            bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{new_credits}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=ParseMode.MARKDOWN), parse_mode=ParseMode.MARKDOWN)
                             
                             response = get_llm_response(command, user_input)
                             
