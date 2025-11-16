@@ -174,6 +174,27 @@ def get_llm_response(agent_name, user_input):
 # --- GESTORE DELLA RICHIESTA HTTP (SERVERLESS FUNCTION) ---
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
+        # 1. CONTROLLO CRITICO DELLE VARIABILI D'AMBIENTE
+        # Se le chiavi essenziali non sono presenti, invia un messaggio di errore all'utente
+        if not all([TELEGRAM_TOKEN, GROQ_API_KEY, SUPABASE_URL, SUPABASE_KEY, STRIPE_SECRET_KEY, STRIPE_PRODUCT_ID]):
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            # Tenta di inviare un messaggio di errore se il token è presente
+            if TELEGRAM_TOKEN and self.headers.get('X-Forwarded-Host'):
+                try:
+                    content_length = int(self.headers['Content-Length'])
+                    post_data = self.rfile.read(content_length)
+                    update = telegram.Update.de_json(json.loads(post_data.decode('utf-8')), None)
+                    if update.message:
+                        bot = telegram.Bot(token=TELEGRAM_TOKEN)
+                        missing_keys = [k for k, v in {'GROQ_API_KEY': GROQ_API_KEY, 'SUPABASE_URL': SUPABASE_URL, 'STRIPE_SECRET_KEY': STRIPE_SECRET_KEY}.items() if not v]
+                        bot.send_message(chat_id=update.message.chat.id, text=f"⚠️ **ERRORE CRITICO DI CONFIGURAZIONE!** ⚠️\n\nIl bot non è configurato correttamente. Le seguenti chiavi sono mancanti o vuote in Vercel: {', '.join(missing_keys)}\n\n**SOLUZIONE:** Vai alla dashboard di Vercel e inserisci le chiavi mancanti.", parse_mode=telegram.ParseMode.MARKDOWN)
+                except Exception as e:
+                    print(f"Errore durante l'invio del messaggio di errore: {e}")
+            
+            return
         # Controllo delle chiavi API essenziali
         if not TELEGRAM_TOKEN or not GROQ_API_KEY or not SUPABASE_URL or not SUPABASE_KEY:
             self.send_response(500)

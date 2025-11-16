@@ -1,11 +1,8 @@
 {
+  "version": 2,
   "builds": [
     {
-      "src": "api/telegram.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/stripe_webhook.py",
+      "src": "api/*.py",
       "use": "@vercel/python"
     }
   ],
@@ -23,7 +20,7 @@
       "dest": "main.js"
     },
     {
-      "src": "/(.*)",
+      "src": "/",
       "dest": "index.html"
     }
   ]
