@@ -183,7 +183,7 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         # 1. CONTROLLO CRITICO DELLE VARIABILI D'AMBIENTE
         # Se le chiavi essenziali non sono presenti, invia un messaggio di errore all'utente
-        if not all([TELEGRAM_TOKEN, GROQ_API_KEY, SUPABASE_URL, SUPABASE_KEY, STRIPE_SECRET_KEY, STRIPE_PRODUCT_ID]):
+        if not all([TELEGRAM_TOKEN, GROQ_API_KEY, SUPABASE_URL, SUPABASE_KEY]):
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -281,9 +281,13 @@ class handler(BaseHTTPRequestHandler):
                         if len(parts) > 1:
                             user_input = parts[1].strip()
                             
+                            # Correzione: Aggiungere la sanitizzazione dell'input per prevenire Prompt Injection
+                            # L'input dell'utente viene racchiuso in un delimitatore univoco.
+                            user_input = f"USER_INPUT_START\\n{user_input}\\nUSER_INPUT_END"
+                            
                             credits = get_user_credits(user_id)
                             if credits <= 0:
-                                bot.send_message(chat_id=chat_id, text="🚫 **Crediti esauriti!** Per continuare a usare gli agenti, acquista nuovi crediti con il comando `/buy`.")
+                                bot.send_message(chat_id=chat_id, text="🚫 **Crediti esauriti!** Per continuare a usare gli agenti, acquista nuovi crediti con il comando `/buy`.", parse_mode=ParseMode.MARKDOWN)
                                 self.send_response(200)
                                 self.end_headers()
                                 return
@@ -294,11 +298,11 @@ class handler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 return
                             
-                            bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=ParseMode.MARKDOWN)
+                           bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=ParseMode.MARKDOWN), parse_mode=ParseMode.MARKDOWN)
                             
                             response = get_llm_response(command, user_input)
                             
-                            bot.send_message(chat_id=chat_id, text=response)
+                            bot.send_message(chat_id=chat_id, text=response, parse_mode=ParseMode.MARKDOWN)
                         else:
                             if bot:
                                 bot.send_message(chat_id=chat_id, text=f"Uso corretto: `/{command} [la tua richiesta]`", parse_mode=ParseMode.MARKDOWN)
