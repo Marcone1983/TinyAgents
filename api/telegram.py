@@ -232,81 +232,86 @@ class handler(BaseHTTPRequestHandler):
                 bot = None
             else:
                 bot = telegram.Bot(token=TELEGRAM_TOKEN)
+            
+            # Inizio del blocco di gestione dei comandi con try/except per debug
+            try:
+                # Logica di routing dei comandi
+                if text.startswith('/start'):
+                    if "success" in text:
+                        bot.send_message(chat_id=chat_id, text="🎉 Pagamento completato con successo! I tuoi crediti saranno aggiunti a breve. Usa /credits per controllare il saldo.")
+                    elif "cancel" in text:
+                        bot.send_message(chat_id=chat_id, text="❌ Pagamento annullato. Puoi riprovare in qualsiasi momento con /buy.")
+                    else:
+                        welcome_message = "Benvenuto in Tiny Agents! 🤖\n\n"
+                        welcome_message += "Scegli un micro-agente per un compito specifico:\n\n"
+                        for agent_name, data in AGENTS.items():
+                            welcome_message += f"🔹 `/{agent_name}` - {data['description']}\n"
+                        welcome_message += "\nUsa il comando seguito dalla tua richiesta. Esempio:\n`/meme_persona gatto che suona il pianoforte`\n\n"
+                        welcome_message += "💳 **Monetizzazione:** Usa `/credits` per vedere il tuo saldo e `/buy` per acquistare nuovi utilizzi."
+                        
+                        if bot:
+                            bot.send_message(chat_id=chat_id, text=welcome_message, parse_mode=telegram.ParseMode.MARKDOWN)
 
-            # Logica di routing dei comandi
-            if text.startswith('/start'):
-                if "success" in text:
-                    bot.send_message(chat_id=chat_id, text="🎉 Pagamento completato con successo! I tuoi crediti saranno aggiunti a breve. Usa /credits per controllare il saldo.")
-                elif "cancel" in text:
-                    bot.send_message(chat_id=chat_id, text="❌ Pagamento annullato. Puoi riprovare in qualsiasi momento con /buy.")
-                else:
-                    welcome_message = "Benvenuto in Tiny Agents! 🤖\n\n"
-                    welcome_message += "Scegli un micro-agente per un compito specifico:\n\n"
-                    for agent_name, data in AGENTS.items():
-                        welcome_message += f"🔹 `/{agent_name}` - {data['description']}\n"
-                    welcome_message += "\nUsa il comando seguito dalla tua richiesta. Esempio:\n`/meme_persona gatto che suona il pianoforte`\n\n"
-                    welcome_message += "💳 **Monetizzazione:** Usa `/credits` per vedere il tuo saldo e `/buy` per acquistare nuovi utilizzi."
-                    
+                elif text.startswith('/credits'):
+                    credits = get_user_credits(user_id)
                     if bot:
-                        bot.send_message(chat_id=chat_id, text=welcome_message, parse_mode=telegram.ParseMode.MARKDOWN)
+                        bot.send_message(chat_id=chat_id, text=f"Il tuo saldo attuale è di **{credits}** crediti. Usa `/buy` per ricaricare.", parse_mode=telegram.ParseMode.MARKDOWN)
 
-            elif text.startswith('/credits'):
-                credits = get_user_credits(user_id)
-                if bot:
-                    bot.send_message(chat_id=chat_id, text=f"Il tuo saldo attuale è di **{credits}** crediti. Usa `/buy` per ricaricare.", parse_mode=telegram.ParseMode.MARKDOWN)
+                elif text.startswith('/buy'):
+                    bot_url = self.headers.get('X-Forwarded-Host', 'https://t.me/TinyAgents_bot')
+                    checkout_url = create_stripe_checkout_session(user_id, bot_url)
+                    
+                    if "Errore" in checkout_url:
+                        bot.send_message(chat_id=chat_id, text=checkout_url)
+                    else:
+                        bot.send_message(chat_id=chat_id, text=f"Clicca qui per acquistare crediti: [Acquista Crediti]({checkout_url})", parse_mode=telegram.ParseMode.MARKDOWN)
 
-            elif text.startswith('/buy'):
-                bot_url = self.headers.get('X-Forwarded-Host', 'https://t.me/TinyAgents_bot')
-                checkout_url = create_stripe_checkout_session(user_id, bot_url)
-                
-                if "Errore" in checkout_url:
-                    bot.send_message(chat_id=chat_id, text=checkout_url)
-                else:
-                    bot.send_message(chat_id=chat_id, text=f"Clicca qui per acquistare crediti: [Acquista Crediti]({checkout_url})", parse_mode=telegram.ParseMode.MARKDOWN)
+                elif text.startswith('/'):
+                    parts = text.split(' ', 1)
+                    command = parts[0][1:]
+                    
+                    if command in AGENTS:
+                        if len(parts) > 1:
+                            user_input = parts[1].strip()
+                            
+                            credits = get_user_credits(user_id)
+                            if credits <= 0:
+                                bot.send_message(chat_id=chat_id, text="🚫 **Crediti esauriti!** Per continuare a usare gli agenti, acquista nuovi crediti con il comando `/buy`.")
+                                self.send_response(200)
+                                self.end_headers()
+                                return
 
-            elif text.startswith('/'):
-                parts = text.split(' ', 1)
-                command = parts[0][1:]
-                
-                if command in AGENTS:
-                    if len(parts) > 1:
-                        user_input = parts[1].strip()
-                        
-                        credits = get_user_credits(user_id)
-                        if credits <= 0:
-                            bot.send_message(chat_id=chat_id, text="🚫 **Crediti esauriti!** Per continuare a usare gli agenti, acquista nuovi crediti con il comando `/buy`.")
-                            self.send_response(200)
-                            self.end_headers()
-                            return
-
-                        if not decrement_user_credits(user_id):
-                            bot.send_message(chat_id=chat_id, text="⚠️ Errore nel decremento dei crediti. Riprova o contatta l'assistenza.")
-                            self.send_response(200)
-                            self.end_headers()
-                            return
-                        
-                        bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=telegram.ParseMode.MARKDOWN)
-                        
-                        response = get_llm_response(command, user_input)
-                        
-                        bot.send_message(chat_id=chat_id, text=response)
+                            if not decrement_user_credits(user_id):
+                                bot.send_message(chat_id=chat_id, text="⚠️ Errore nel decremento dei crediti. Riprova o contatta l'assistenza.")
+                                self.send_response(200)
+                                self.end_headers()
+                                return
+                            
+                            bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=telegram.ParseMode.MARKDOWN)
+                            
+                            response = get_llm_response(command, user_input)
+                            
+                            bot.send_message(chat_id=chat_id, text=response)
+                        else:
+                            if bot:
+                                bot.send_message(chat_id=chat_id, text=f"Uso corretto: `/{command} [la tua richiesta]`", parse_mode=telegram.ParseMode.MARKDOWN)
                     else:
                         if bot:
-                            bot.send_message(chat_id=chat_id, text=f"Uso corretto: `/{command} [la tua richiesta]`", parse_mode=telegram.ParseMode.MARKDOWN)
+                            bot.send_message(chat_id=chat_id, text="Comando non riconosciuto. Usa /start per vedere la lista degli agenti disponibili.")
+                
                 else:
-                    if bot:
-                        bot.send_message(chat_id=chat_id, text="Comando non riconosciuto. Usa /start per vedere la lista degli agenti disponibili.")
+                    pass
             
-            else:
-                pass
+            except Exception as e:
+                # Logga l'errore specifico del gestore comandi
+                print(f"ERRORE GESTORE COMANDI: {e}")
+                if bot and chat_id:
+                    bot.send_message(chat_id=chat_id, text=f"Si è verificato un errore interno durante l'elaborazione del comando. Dettagli: {e}")
 
         except Exception as e:
-            print(f"Errore nel gestore: {e}")
-            try:
-                if bot and chat_id:
-                    bot.send_message(chat_id=chat_id, text="Si è verificato un errore interno. Riprova più tardi.")
-            except:
-                pass
+            # Logga l'errore di parsing o di inizializzazione
+            print(f"ERRORE PARSING/INIZIALIZZAZIONE: {e}")
+            # Non possiamo inviare un messaggio all'utente qui perché chat_id potrebbe non essere disponibile
 
         self.send_response(200)
         self.end_headers()
