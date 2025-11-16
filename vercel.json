@@ -19,7 +19,11 @@
       "dest": "api/stripe_webhook.py"
     },
     {
-      "src": "/",
+      "src": "/main.js",
+      "dest": "main.js"
+    },
+    {
+      "src": "/(.*)",
       "dest": "index.html"
     }
   ]

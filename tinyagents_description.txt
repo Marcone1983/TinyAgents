@@ -1,0 +1,11 @@
+TinyAgents: Your Micro-AI Powerhouse.
+
+Unleash the power of specialized AI with TinyAgents! This bot provides instant, hyper-focused content generation using fast, cutting-edge LLMs.
+
+**Features:**
+*   **Meme Persona:** Turn any idea into a viral meme caption instantly.
+*   **Viral Pitch:** Generate concise, professional LinkedIn direct messages.
+*   **Roast Generator:** Get a funny, witty roast for any topic.
+*   **Credit System:** Pay-as-you-go monetization powered by Stripe and Supabase.
+
+Get instant, high-quality results for your social media, business, and fun needs. Use /start to see the full list of agents and /buy to get credits!

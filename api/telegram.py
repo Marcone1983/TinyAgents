@@ -14,7 +14,7 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
-STRIPE_PRODUCT_ID = os.environ.get('STRIPE_PRODUCT_ID') # ID del prodotto Stripe per 100 crediti
+STRIPE_PRODUCT_ID = os.environ.get('STRIPE_PRODUCT_ID')
 
 # Inizializza i client
 try:
@@ -39,7 +39,7 @@ except Exception as e:
 def get_user_credits(user_id: int) -> int:
     """Recupera i crediti dell'utente da Supabase. Crea un record se non esiste."""
     if not supabase_client:
-        return 0 # Fallback in caso di errore di connessione
+        return 0
         
     try:
         response = supabase_client.table('users').select('credits').eq('id', user_id).execute()
@@ -47,7 +47,6 @@ def get_user_credits(user_id: int) -> int:
         if response.data:
             return response.data[0]['credits']
         else:
-            # Utente non trovato, lo creiamo con 0 crediti
             supabase_client.table('users').insert({"id": user_id, "credits": 0}).execute()
             return 0
     except Exception as e:
@@ -60,10 +59,8 @@ def decrement_user_credits(user_id: int) -> bool:
         return False
         
     try:
-        # Recupera i crediti attuali
         current_credits = get_user_credits(user_id)
         if current_credits > 0:
-            # Decrementa e aggiorna
             new_credits = current_credits - 1
             supabase_client.table('users').update({"credits": new_credits}).eq('id', user_id).execute()
             return True
@@ -79,8 +76,6 @@ def create_stripe_checkout_session(user_id: int, bot_url: str) -> str:
     if not STRIPE_PRODUCT_ID or not stripe.api_key:
         return "Errore di configurazione Stripe. Controlla STRIPE_PRODUCT_ID e STRIPE_SECRET_KEY."
 
-    # URL di successo e cancellazione (devono essere configurati su Vercel)
-    # Usiamo l'URL del bot come base per reindirizzare l'utente a Telegram
     success_url = f"https://t.me/TinyAgents_bot?start=success_{user_id}"
     cancel_url = f"https://t.me/TinyAgents_bot?start=cancel_{user_id}"
     
@@ -88,13 +83,13 @@ def create_stripe_checkout_session(user_id: int, bot_url: str) -> str:
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
-                'price': STRIPE_PRODUCT_ID, # Questo è l'ID del Prodotto, non del Prezzo. Lo useremo per cercare il prezzo predefinito.
+                'price': STRIPE_PRODUCT_ID,
                 'quantity': 1,
             }],
             mode='payment',
             success_url=success_url,
             cancel_url=cancel_url,
-            client_reference_id=str(user_id), # Usiamo l'ID Telegram come riferimento
+            client_reference_id=str(user_id),
             metadata={
                 'telegram_user_id': str(user_id),
             }
@@ -105,7 +100,7 @@ def create_stripe_checkout_session(user_id: int, bot_url: str) -> str:
         return "Errore durante la creazione della sessione di pagamento."
 
 
-# --- DEFINIZIONE DEI "TINY AGENTS" ---
+# --- DEFINIZIONE DEI "TINY AGENTS" (10 AGENTI) ---
 AGENTS = {
     "meme_persona": {
         "description": "Trasforma una tua idea in una caption per un meme virale.",
@@ -118,6 +113,34 @@ AGENTS = {
     "roast_generator": {
         "description": "Fornisci un argomento e io lo 'roasterò' simpaticamente.",
         "system_prompt": "Sei un comico specializzato in 'roast'. Data una parola o una frase, crea una battuta divertente e pungente, ma mai offensiva o volgare. Sii creativo e inaspettato."
+    },
+    "email_writer": {
+        "description": "Scrivi email professionali e persuasive.",
+        "system_prompt": "Sei un esperto di email marketing. Scrivi un'email professionale e persuasiva basata sul tema fornito dall'utente. L'email deve essere breve (max 100 parole), con un oggetto accattivante e una call-to-action chiara."
+    },
+    "tweet_generator": {
+        "description": "Crea tweet virali e accattivanti.",
+        "system_prompt": "Sei un esperto di social media. Crea un tweet breve (max 280 caratteri), virale e accattivante basato sull'idea dell'utente. Aggiungi emoji pertinenti e hashtag di tendenza."
+    },
+    "product_description": {
+        "description": "Scrivi descrizioni di prodotti per e-commerce.",
+        "system_prompt": "Sei un copywriter di e-commerce. Scrivi una descrizione di prodotto breve e persuasiva (max 150 parole) basata sul prodotto descritto dall'utente. Evidenzia i benefici principali e crea urgenza d'acquisto."
+    },
+    "story_starter": {
+        "description": "Genera l'inizio di una storia affascinante.",
+        "system_prompt": "Sei uno scrittore creativo. Genera l'inizio di una storia affascinante (max 100 parole) basato sul tema fornito dall'utente. L'inizio deve catturare l'attenzione e creare suspense."
+    },
+    "code_explainer": {
+        "description": "Spiega concetti di programmazione in modo semplice.",
+        "system_prompt": "Sei un insegnante di programmazione. Spiega il concetto di programmazione fornito dall'utente in modo semplice e comprensibile (max 150 parole). Usa esempi pratici e evita il gergo tecnico complesso."
+    },
+    "motivational_quote": {
+        "description": "Genera citazioni motivazionali personalizzate.",
+        "system_prompt": "Sei un coach motivazionale. Genera una citazione motivazionale personalizzata (max 50 parole) basata sulla situazione o il tema fornito dall'utente. La citazione deve essere ispiratrice e pratica."
+    },
+    "seo_optimizer": {
+        "description": "Ottimizza il testo per i motori di ricerca.",
+        "system_prompt": "Sei un esperto SEO. Ottimizza il testo fornito dall'utente per i motori di ricerca (max 150 parole). Aggiungi parole chiave pertinenti, migliora la struttura e rendi il testo più accattivante per i lettori."
     }
 }
 
@@ -139,7 +162,7 @@ def get_llm_response(agent_name, user_input):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_input},
             ],
-            model="llama3-8b-8192", # Un modello veloce ed efficace
+            model="llama3-8b-8192",
             temperature=0.7,
             max_tokens=150,
         )
@@ -151,6 +174,23 @@ def get_llm_response(agent_name, user_input):
 # --- GESTORE DELLA RICHIESTA HTTP (SERVERLESS FUNCTION) ---
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
+        # Controllo delle chiavi API essenziali
+        if not TELEGRAM_TOKEN or not GROQ_API_KEY or not SUPABASE_URL or not SUPABASE_KEY:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            error_msg = {
+                "error": "Configurazione incompleta",
+                "missing": {
+                    "TELEGRAM_TOKEN": not TELEGRAM_TOKEN,
+                    "GROQ_API_KEY": not GROQ_API_KEY,
+                    "SUPABASE_URL": not SUPABASE_URL,
+                    "SUPABASE_KEY": not SUPABASE_KEY
+                }
+            }
+            self.wfile.write(json.dumps(error_msg).encode())
+            return
+        
         # Leggi il corpo della richiesta inviata da Telegram
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
@@ -174,13 +214,11 @@ class handler(BaseHTTPRequestHandler):
 
             # Logica di routing dei comandi
             if text.startswith('/start'):
-                # Gestione dei messaggi di ritorno da Stripe
                 if "success" in text:
                     bot.send_message(chat_id=chat_id, text="🎉 Pagamento completato con successo! I tuoi crediti saranno aggiunti a breve. Usa /credits per controllare il saldo.")
                 elif "cancel" in text:
                     bot.send_message(chat_id=chat_id, text="❌ Pagamento annullato. Puoi riprovare in qualsiasi momento con /buy.")
                 else:
-                    # Messaggio di benvenuto standard
                     welcome_message = "Benvenuto in Tiny Agents! 🤖\n\n"
                     welcome_message += "Scegli un micro-agente per un compito specifico:\n\n"
                     for agent_name, data in AGENTS.items():
@@ -197,7 +235,6 @@ class handler(BaseHTTPRequestHandler):
                     bot.send_message(chat_id=chat_id, text=f"Il tuo saldo attuale è di **{credits}** crediti. Usa `/buy` per ricaricare.", parse_mode=telegram.ParseMode.MARKDOWN)
 
             elif text.startswith('/buy'):
-                # Otteniamo l'URL base del bot da Vercel (necessario per il reindirizzamento di Stripe)
                 bot_url = self.headers.get('X-Forwarded-Host', 'https://t.me/TinyAgents_bot')
                 checkout_url = create_stripe_checkout_session(user_id, bot_url)
                 
@@ -208,14 +245,12 @@ class handler(BaseHTTPRequestHandler):
 
             elif text.startswith('/'):
                 parts = text.split(' ', 1)
-                command = parts[0][1:] # Rimuove lo '/'
+                command = parts[0][1:]
                 
-                # Controlla se il comando è un agent valido
                 if command in AGENTS:
                     if len(parts) > 1:
                         user_input = parts[1].strip()
                         
-                        # --- LOGICA DI CONTROLLO CREDITI ---
                         credits = get_user_credits(user_id)
                         if credits <= 0:
                             bot.send_message(chat_id=chat_id, text="🚫 **Crediti esauriti!** Per continuare a usare gli agenti, acquista nuovi crediti con il comando `/buy`.")
@@ -223,20 +258,16 @@ class handler(BaseHTTPRequestHandler):
                             self.end_headers()
                             return
 
-                        # Decrementa i crediti prima di procedere
                         if not decrement_user_credits(user_id):
                             bot.send_message(chat_id=chat_id, text="⚠️ Errore nel decremento dei crediti. Riprova o contatta l'assistenza.")
                             self.send_response(200)
                             self.end_headers()
                             return
                         
-                        # Notifica l'utente del saldo rimanente
                         bot.send_message(chat_id=chat_id, text=f"✅ Credito utilizzato. Saldo rimanente: **{credits - 1}**.\n⏳ Sto elaborando la tua richiesta...", parse_mode=telegram.ParseMode.MARKDOWN)
                         
-                        # Ottieni la risposta dall'LLM
                         response = get_llm_response(command, user_input)
                         
-                        # Invia la risposta all'utente
                         bot.send_message(chat_id=chat_id, text=response)
                     else:
                         if bot:
@@ -246,7 +277,7 @@ class handler(BaseHTTPRequestHandler):
                         bot.send_message(chat_id=chat_id, text="Comando non riconosciuto. Usa /start per vedere la lista degli agenti disponibili.")
             
             else:
-                pass # Gestione di messaggi non-comando
+                pass
 
         except Exception as e:
             print(f"Errore nel gestore: {e}")
@@ -256,7 +287,6 @@ class handler(BaseHTTPRequestHandler):
             except:
                 pass
 
-        # Rispondi a Telegram che la richiesta è stata ricevuta correttamente
         self.send_response(200)
         self.end_headers()
         return
