@@ -1,0 +1,22 @@
+{
+  "builds": [
+    {
+      "src": "api/telegram.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/stripe_webhook.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/telegram",
+      "dest": "api/telegram.py"
+    },
+    {
+      "src": "/api/stripe-webhook",
+      "dest": "api/stripe_webhook.py"
+    }
+  ]
+}
